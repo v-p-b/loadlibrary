@@ -50,6 +50,7 @@
 #include "scanreply.h"
 #include "streambuffer.h"
 #include "openscan.h"
+#include "ODSHook.h"
 
 // Any usage limits to prevent bugs disrupting system.
 const struct rlimit kUsageLimits[] = {
@@ -168,6 +169,10 @@ int main(int argc, char **argv, char **envp)
             __debugbreak();
         }
     }
+
+    //Set our hooks for OutputDebugStringA
+    SetHooks((uint32_t)image.image, (uint32_t)image.size);
+
 
     if (get_export("__rsignal", &__rsignal) == -1) {
         errx(EXIT_FAILURE, "Failed to resolve mpengine entrypoint");

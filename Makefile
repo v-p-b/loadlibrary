@@ -23,7 +23,13 @@ mpscript.o: script.h
 
 intercept/hook.o: intercept
 
-mpclient: mpclient.o intercept/hook.o | peloader
+call.o: call.asm
+	nasm -f elf $^
+
+ODSHook.o: ODSHook.c ODSHook.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+mpclient: mpclient.o intercept/hook.o ODSHook.o call.o | peloader
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS) $(LDFLAGS)
 
 # mpscript requires libreadline-dev:i386
