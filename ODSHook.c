@@ -9,15 +9,15 @@
 // MD5: e95d3f9e90ba3ccd1a4b8d63cbd88d1b
 RVAS RVAs_June_2018 = {
 
-    .MPVERNO = "MP_6_25_2018",
+    .MPVERNO = "MP_9_4_2018",
 
     // This function gets the parameter passed a 1 parameter emulated 
     // function from the pe_vars_t * passed to every emulated function
-    .RVA_Parameters1 = 0x46e5d5,
+    .RVA_Parameters1 = 0x4d07f5,
 
     // This function translates the virtual memory address of a string to a 
     // native char * that we can print
-    .RVA_pe_read_string_ex = 0x3e59f3,
+    .RVA_pe_read_string_ex = 0x3ee353,
 
     // The address of the function pointer to KERNEL32_DLL_OuputDebugStringA
     // in the g_syscalls table. It should look something like this:
@@ -29,7 +29,7 @@ RVAS RVAs_June_2018 = {
     .text:5A11A0E8  dd offset ?NTDLL_DLL_NtGetContextThread@@YAXPAUpe_vars_t@@@Z ; NTDLL_DLL_NtGetContextThread(pe_vars_t *)
     .text:5A11A0EC  dd 0B363A610h
     */
-    .RVA_FP_OutputDebugStringA = 0x1af88L,
+    .RVA_FP_OutputDebugStringA = 0x1b528L,
 };
 
 //
