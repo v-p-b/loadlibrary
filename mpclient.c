@@ -50,7 +50,6 @@
 #include "scanreply.h"
 #include "streambuffer.h"
 #include "openscan.h"
-#include "ODSHook.h"
 
 // Any usage limits to prevent bugs disrupting system.
 const struct rlimit kUsageLimits[] = {
@@ -119,6 +118,25 @@ BOOL __noinline InstrumentationCallback(PVOID ImageStart, SIZE_T ImageSize)
     return TRUE;
 }
 
+void call_rsignal(char* a,STREAMBUFFER_DESCRIPTOR* pScanDescriptor, SCANSTREAM_PARAMS* pScanParams, HANDLE* pKernelHandle){
+        pScanDescriptor->UserPtr = fopen(a, "r");
+
+        if (pScanDescriptor->UserPtr == NULL) {
+            LogMessage("failed to open file %s", a);
+            exit(1);
+        }
+
+        LogMessage("Scanning %s...", a);
+
+        if (__rsignal(pKernelHandle, RSIG_SCAN_STREAMBUFFER, pScanParams, sizeof(SCANSTREAM_PARAMS)) != 0) {
+            LogMessage("__rsignal(RSIG_SCAN_STREAMBUFFER) returned failure, file unreadable?");
+            exit(1);
+        }
+
+        fclose(pScanDescriptor->UserPtr);
+        exit(0);
+}
+
 int main(int argc, char **argv, char **envp)
 {
     PIMAGE_DOS_HEADER DosHeader;
@@ -169,10 +187,6 @@ int main(int argc, char **argv, char **envp)
             __debugbreak();
         }
     }
-
-    //Set our hooks for OutputDebugStringA
-    SetHooks((uint32_t)image.image, (uint32_t)image.size);
-
 
     if (get_export("__rsignal", &__rsignal) == -1) {
         errx(EXIT_FAILURE, "Failed to resolve mpengine entrypoint");
@@ -253,7 +267,7 @@ int main(int argc, char **argv, char **envp)
     InstrumentationCallback(image.image, image.size);
 
     for (char *filename = *++argv; *argv; ++argv) {
-        ScanDescriptor.UserPtr = fopen(*argv, "r");
+        /*ScanDescriptor.UserPtr = fopen(*argv, "r");
 
         if (ScanDescriptor.UserPtr == NULL) {
             LogMessage("failed to open file %s", *argv);
@@ -267,7 +281,11 @@ int main(int argc, char **argv, char **envp)
             return 1;
         }
 
-        fclose(ScanDescriptor.UserPtr);
+        fclose(ScanDescriptor.UserPtr);*/
+
+        //void call_rsignal(char* a,STREAMBUFFER_DESCRIPTOR* pScanDescriptor, SCANSTREAM_PARAMS* pScanParams, HANDLE* pKernelHandle){
+
+    	call_rsignal(*argv, &ScanDescriptor, &ScanParams, &KernelHandle);
     }
 
     return 0;
