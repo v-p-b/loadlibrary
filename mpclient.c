@@ -119,7 +119,7 @@ BOOL __noinline InstrumentationCallback(PVOID ImageStart, SIZE_T ImageSize)
 }
 
 void call_rsignal(char* a,STREAMBUFFER_DESCRIPTOR* pScanDescriptor, SCANSTREAM_PARAMS* pScanParams, HANDLE* pKernelHandle){
-        pScanDescriptor->UserPtr = fopen(a, "r");
+       pScanDescriptor->UserPtr = fopen(a, "r");
 
         if (pScanDescriptor->UserPtr == NULL) {
             LogMessage("failed to open file %s", a);
@@ -130,12 +130,27 @@ void call_rsignal(char* a,STREAMBUFFER_DESCRIPTOR* pScanDescriptor, SCANSTREAM_P
 
         if (__rsignal(pKernelHandle, RSIG_SCAN_STREAMBUFFER, pScanParams, sizeof(SCANSTREAM_PARAMS)) != 0) {
             LogMessage("__rsignal(RSIG_SCAN_STREAMBUFFER) returned failure, file unreadable?");
-            exit(1);
         }
 
         fclose(pScanDescriptor->UserPtr);
-        exit(0);
+	exit(0);
 }
+
+// clang doesn't support nested functions
+EXCEPTION_DISPOSITION ExceptionHandler(struct _EXCEPTION_RECORD *ExceptionRecord,
+    struct _EXCEPTION_FRAME *EstablisherFrame,
+    struct _CONTEXT *ContextRecord,
+    struct _EXCEPTION_FRAME **DispatcherContext)
+{
+LogMessage("Toplevel Exception Handler Caught Exception");
+abort();
+}
+
+VOID ResourceExhaustedHandler(int Signal)
+{
+errx(EXIT_FAILURE, "Resource Limits Exhausted, Signal %s", strsignal(Signal));
+}
+
 
 int main(int argc, char **argv, char **envp)
 {
@@ -190,20 +205,6 @@ int main(int argc, char **argv, char **envp)
 
     if (get_export("__rsignal", &__rsignal) == -1) {
         errx(EXIT_FAILURE, "Failed to resolve mpengine entrypoint");
-    }
-
-    EXCEPTION_DISPOSITION ExceptionHandler(struct _EXCEPTION_RECORD *ExceptionRecord,
-            struct _EXCEPTION_FRAME *EstablisherFrame,
-            struct _CONTEXT *ContextRecord,
-            struct _EXCEPTION_FRAME **DispatcherContext)
-    {
-        LogMessage("Toplevel Exception Handler Caught Exception");
-        abort();
-    }
-
-    VOID ResourceExhaustedHandler(int Signal)
-    {
-        errx(EXIT_FAILURE, "Resource Limits Exhausted, Signal %s", strsignal(Signal));
     }
 
     setup_nt_threadinfo(ExceptionHandler);
@@ -267,7 +268,7 @@ int main(int argc, char **argv, char **envp)
     InstrumentationCallback(image.image, image.size);
 
     for (char *filename = *++argv; *argv; ++argv) {
-        /*ScanDescriptor.UserPtr = fopen(*argv, "r");
+        ScanDescriptor.UserPtr = fopen("/etc/hosts", "r");
 
         if (ScanDescriptor.UserPtr == NULL) {
             LogMessage("failed to open file %s", *argv);
@@ -281,10 +282,8 @@ int main(int argc, char **argv, char **envp)
             return 1;
         }
 
-        fclose(ScanDescriptor.UserPtr);*/
-
-        //void call_rsignal(char* a,STREAMBUFFER_DESCRIPTOR* pScanDescriptor, SCANSTREAM_PARAMS* pScanParams, HANDLE* pKernelHandle){
-
+        fclose(ScanDescriptor.UserPtr);
+      
     	call_rsignal(*argv, &ScanDescriptor, &ScanParams, &KernelHandle);
     }
 
