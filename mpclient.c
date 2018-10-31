@@ -64,10 +64,6 @@ const struct rlimit kUsageLimits[] = {
 };
 
 
-   HANDLE KernelHandle;
-    SCANSTREAM_PARAMS ScanParams;
-    STREAMBUFFER_DESCRIPTOR ScanDescriptor;
-
 DWORD (* __rsignal)(PHANDLE KernelHandle, DWORD Code, PVOID Params, DWORD Size);
 
 static DWORD EngineScanCallback(PSCANSTRUCT Scan)
@@ -127,27 +123,7 @@ BOOL __noinline InstrumentationCallback(PVOID ImageStart, SIZE_T ImageSize)
     return TRUE;
 }
 
-//void call_rsignal(char* a/*,STREAMBUFFER_DESCRIPTOR* pScanDescriptor, SCANSTREAM_PARAMS* pScanParams, HANDLE* pKernelHandle*/){
-//int LLVMFuzzerTestOneInput(const uint8_t* buf, size_t len){
-/*       ScanDescriptor.UserPtr = fopen("/tmp/test", "rw");
 
-        if (ScanDescriptor.UserPtr == NULL) {
-            LogMessage("failed to open file %s", "/tmp/test");
-            return -10;
-        }
-	LogMessage("Writing...");
-       fwrite(buf,1,len,ScanDescriptor.UserPtr);
-       fflush(ScanDescriptor.UserPtr);	
-        LogMessage("Scanning %s...", "/tmp/test");
-
-        if (__rsignal(&KernelHandle, RSIG_SCAN_STREAMBUFFER, &ScanParams, sizeof(SCANSTREAM_PARAMS)) != 0) {
-            LogMessage("__rsignal(RSIG_SCAN_STREAMBUFFER) returned failure, file unreadable?");
-        }
-
-        fclose(ScanDescriptor.UserPtr);
-	return 0;
-}
-*/
 // clang doesn't support nested functions
 EXCEPTION_DISPOSITION ExceptionHandler(struct _EXCEPTION_RECORD *ExceptionRecord,
     struct _EXCEPTION_FRAME *EstablisherFrame,
@@ -165,12 +141,14 @@ errx(EXIT_FAILURE, "Resource Limits Exhausted, Signal %s", strsignal(Signal));
 
 
 int main(int argc, char **argv, char **envp)
-//int LLVMFuzzerInitialize(int* argc, char*** argv)
 {
     PIMAGE_DOS_HEADER DosHeader;
-    PIMAGE_NT_HEADERS PeHeader; 
+    PIMAGE_NT_HEADERS PeHeader;
+    HANDLE KernelHandle;
     SCAN_REPLY ScanReply;
     BOOTENGINE_PARAMS BootParams;
+    SCANSTREAM_PARAMS ScanParams;
+    STREAMBUFFER_DESCRIPTOR ScanDescriptor;
     ENGINE_INFO EngineInfo;
     ENGINE_CONFIG EngineConfig;
 
@@ -197,23 +175,7 @@ int main(int argc, char **argv, char **envp)
 #ifndef NDEBUG
         LogMessage("The map file wasn't found, symbols wont be available");
 #endif
-    }/* else {
-        // Calculate the commands needed to get export and map symbols visible in gdb.
-        if (IsDebuggerPresent()) {
-            LogMessage("GDB: add-symbol-file %s %#x+%#x",
-                       image.name,
-                       image.image,
-                       PeHeader->OptionalHeader.BaseOfCode);
-            LogMessage("GDB: shell bash genmapsym.sh %#x+%#x symbols_%d.o < %s",
-                       image.image,
-                       PeHeader->OptionalHeader.BaseOfCode,
-                       getpid(),
-                       "engine/mpengine.map");
-            LogMessage("GDB: add-symbol-file symbols_%d.o 0", getpid());
-            __debugbreak();
-        }
-    }*/
-
+    }
     if (get_export("__rsignal", &__rsignal) == -1) {
         errx(EXIT_FAILURE, "Failed to resolve mpengine entrypoint");
     }
@@ -270,62 +232,42 @@ int main(int argc, char **argv, char **envp)
     ScanDescriptor.GetSize       = GetStreamSize;
     ScanDescriptor.GetName       = GetStreamName;
 
-    /*if (argc < 2) {
-        LogMessage("usage: %s [filenames...]", *argv);
-        return 1;
-    }*/
-
     // Enable Instrumentation.
     InstrumentationCallback(image.image, image.size);
 
-    //for (char *filename = *++argv; *argv; ++argv) {
-        ScanDescriptor.UserPtr = fopen("/etc/hosts", "r");
+    
+    ScanDescriptor.UserPtr = fopen("/etc/hosts", "r");
 
-        if (ScanDescriptor.UserPtr == NULL) {
-        //    LogMessage("failed to open file %s", *argv);
-            return -1;
-        }
+    if (ScanDescriptor.UserPtr == NULL) {
+        return -1;
+    }
 
-        LogMessage("Scanning xxx...");
+    LogMessage("Scanning dummy...");
 
-        if (__rsignal(&KernelHandle, RSIG_SCAN_STREAMBUFFER, &ScanParams, sizeof ScanParams) != 0) {
-            LogMessage("__rsignal(RSIG_SCAN_STREAMBUFFER) returned failure, file unreadable?");
-            return -2;
-        }
+    if (__rsignal(&KernelHandle, RSIG_SCAN_STREAMBUFFER, &ScanParams, sizeof ScanParams) != 0) {
+        LogMessage("__rsignal(RSIG_SCAN_STREAMBUFFER) returned failure, file unreadable?");
+        return -2;
+    }
 
-        fclose(ScanDescriptor.UserPtr);
+    fclose(ScanDescriptor.UserPtr);
       
-    	//call_rsignal(*argv/*, &ScanDescriptor, &ScanParams, &KernelHandle*/);
-    //}
+    
 	for(;;){
-	size_t len;
-	uint8_t *buf;
-	if (false){
+		size_t len;
+		uint8_t *buf;
+		ScanDescriptor.UserPtr = fopen("/tmp/test", "w+");
+		if (ScanDescriptor.UserPtr == NULL) {
+	        LogMessage("failed to open file /tmp/test");
+            return -10;
+        }
 
-		ScanDescriptor.UserPtr = fopen(argv[1],"r");
-		 if (ScanDescriptor.UserPtr == NULL) {
-	            LogMessage("failed to open file %s", argv[1]);
-            	    return -10;
-                 }
+       	LogMessage("Writing...");
 
-
-	}else{
-		ScanDescriptor.UserPtr = fopen("/tmp/test", "w");
-		 if (ScanDescriptor.UserPtr == NULL) {
-	            LogMessage("failed to open file %s", "/tmp/test");
-            	    return -10;
-                 }
-
-       		LogMessage("Writing...");
 		HF_ITER(&buf,&len);
+        fwrite(buf,1,len,ScanDescriptor.UserPtr);
 		
-        	fwrite(buf,1,len,ScanDescriptor.UserPtr);
-		//fwrite("X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*",1,69,ScanDescriptor.UserPtr);
-	        fflush(ScanDescriptor.UserPtr);	
-		fclose(ScanDescriptor.UserPtr);
-		ScanDescriptor.UserPtr = fopen("/tmp/test", "r");
-		//exit(13);
-	}
+        rewind(ScanDescriptor.UserPtr);
+	
         LogMessage("Scanning %s...", "/tmp/test");
 
         if (__rsignal(&KernelHandle, RSIG_SCAN_STREAMBUFFER, &ScanParams, sizeof(SCANSTREAM_PARAMS)) != 0) {
@@ -333,7 +275,6 @@ int main(int argc, char **argv, char **envp)
         }
 
         fclose(ScanDescriptor.UserPtr);
-	//return 0;
 	}
     return 0;
 }
