@@ -51,6 +51,10 @@
 #include "streambuffer.h"
 #include "openscan.h"
 
+#include <inttypes.h>
+
+extern HF_ITER(uint8_t** buf, size_t* len);
+
 // Any usage limits to prevent bugs disrupting system.
 const struct rlimit kUsageLimits[] = {
     [RLIMIT_FSIZE]  = { .rlim_cur = 0x20000000, .rlim_max = 0x20000000 },
@@ -58,6 +62,11 @@ const struct rlimit kUsageLimits[] = {
     [RLIMIT_CORE]   = { .rlim_cur = 0,          .rlim_max = 0 },
     [RLIMIT_NOFILE] = { .rlim_cur = 32,         .rlim_max = 32 },
 };
+
+
+   HANDLE KernelHandle;
+    SCANSTREAM_PARAMS ScanParams;
+    STREAMBUFFER_DESCRIPTOR ScanDescriptor;
 
 DWORD (* __rsignal)(PHANDLE KernelHandle, DWORD Code, PVOID Params, DWORD Size);
 
@@ -118,24 +127,27 @@ BOOL __noinline InstrumentationCallback(PVOID ImageStart, SIZE_T ImageSize)
     return TRUE;
 }
 
-void call_rsignal(char* a,STREAMBUFFER_DESCRIPTOR* pScanDescriptor, SCANSTREAM_PARAMS* pScanParams, HANDLE* pKernelHandle){
-       pScanDescriptor->UserPtr = fopen(a, "r");
+//void call_rsignal(char* a/*,STREAMBUFFER_DESCRIPTOR* pScanDescriptor, SCANSTREAM_PARAMS* pScanParams, HANDLE* pKernelHandle*/){
+//int LLVMFuzzerTestOneInput(const uint8_t* buf, size_t len){
+/*       ScanDescriptor.UserPtr = fopen("/tmp/test", "rw");
 
-        if (pScanDescriptor->UserPtr == NULL) {
-            LogMessage("failed to open file %s", a);
-            exit(1);
+        if (ScanDescriptor.UserPtr == NULL) {
+            LogMessage("failed to open file %s", "/tmp/test");
+            return -10;
         }
+	LogMessage("Writing...");
+       fwrite(buf,1,len,ScanDescriptor.UserPtr);
+       fflush(ScanDescriptor.UserPtr);	
+        LogMessage("Scanning %s...", "/tmp/test");
 
-        LogMessage("Scanning %s...", a);
-
-        if (__rsignal(pKernelHandle, RSIG_SCAN_STREAMBUFFER, pScanParams, sizeof(SCANSTREAM_PARAMS)) != 0) {
+        if (__rsignal(&KernelHandle, RSIG_SCAN_STREAMBUFFER, &ScanParams, sizeof(SCANSTREAM_PARAMS)) != 0) {
             LogMessage("__rsignal(RSIG_SCAN_STREAMBUFFER) returned failure, file unreadable?");
         }
 
-        fclose(pScanDescriptor->UserPtr);
-	exit(0);
+        fclose(ScanDescriptor.UserPtr);
+	return 0;
 }
-
+*/
 // clang doesn't support nested functions
 EXCEPTION_DISPOSITION ExceptionHandler(struct _EXCEPTION_RECORD *ExceptionRecord,
     struct _EXCEPTION_FRAME *EstablisherFrame,
@@ -153,17 +165,16 @@ errx(EXIT_FAILURE, "Resource Limits Exhausted, Signal %s", strsignal(Signal));
 
 
 int main(int argc, char **argv, char **envp)
+//int LLVMFuzzerInitialize(int* argc, char*** argv)
 {
     PIMAGE_DOS_HEADER DosHeader;
-    PIMAGE_NT_HEADERS PeHeader;
-    HANDLE KernelHandle;
+    PIMAGE_NT_HEADERS PeHeader; 
     SCAN_REPLY ScanReply;
     BOOTENGINE_PARAMS BootParams;
-    SCANSTREAM_PARAMS ScanParams;
-    STREAMBUFFER_DESCRIPTOR ScanDescriptor;
     ENGINE_INFO EngineInfo;
     ENGINE_CONFIG EngineConfig;
-    struct pe_image image = {
+
+       struct pe_image image = {
         .entry  = NULL,
         .name   = "engine/mpengine.dll",
     };
@@ -171,7 +182,7 @@ int main(int argc, char **argv, char **envp)
     // Load the mpengine module.
     if (pe_load_library(image.name, &image.image, &image.size) == false) {
         LogMessage("You must add the dll and vdm files to the engine directory");
-        return 1;
+        return -3;
     }
 
     // Handle relocations, imports, etc.
@@ -186,7 +197,7 @@ int main(int argc, char **argv, char **envp)
 #ifndef NDEBUG
         LogMessage("The map file wasn't found, symbols wont be available");
 #endif
-    } else {
+    }/* else {
         // Calculate the commands needed to get export and map symbols visible in gdb.
         if (IsDebuggerPresent()) {
             LogMessage("GDB: add-symbol-file %s %#x+%#x",
@@ -201,7 +212,7 @@ int main(int argc, char **argv, char **envp)
             LogMessage("GDB: add-symbol-file symbols_%d.o 0", getpid());
             __debugbreak();
         }
-    }
+    }*/
 
     if (get_export("__rsignal", &__rsignal) == -1) {
         errx(EXIT_FAILURE, "Failed to resolve mpengine entrypoint");
@@ -244,7 +255,7 @@ int main(int argc, char **argv, char **envp)
     if (__rsignal(&KernelHandle, RSIG_BOOTENGINE, &BootParams, sizeof BootParams) != 0) {
         LogMessage("__rsignal(RSIG_BOOTENGINE) returned failure, missing definitions?");
         LogMessage("Make sure the VDM files and mpengine.dll are in the engine directory");
-        return 1;
+        return -8;
     }
 
     ZeroMemory(&ScanParams, sizeof ScanParams);
@@ -259,33 +270,70 @@ int main(int argc, char **argv, char **envp)
     ScanDescriptor.GetSize       = GetStreamSize;
     ScanDescriptor.GetName       = GetStreamName;
 
-    if (argc < 2) {
+    /*if (argc < 2) {
         LogMessage("usage: %s [filenames...]", *argv);
         return 1;
-    }
+    }*/
 
     // Enable Instrumentation.
     InstrumentationCallback(image.image, image.size);
 
-    for (char *filename = *++argv; *argv; ++argv) {
+    //for (char *filename = *++argv; *argv; ++argv) {
         ScanDescriptor.UserPtr = fopen("/etc/hosts", "r");
 
         if (ScanDescriptor.UserPtr == NULL) {
-            LogMessage("failed to open file %s", *argv);
-            return 1;
+        //    LogMessage("failed to open file %s", *argv);
+            return -1;
         }
 
-        LogMessage("Scanning %s...", *argv);
+        LogMessage("Scanning xxx...");
 
         if (__rsignal(&KernelHandle, RSIG_SCAN_STREAMBUFFER, &ScanParams, sizeof ScanParams) != 0) {
             LogMessage("__rsignal(RSIG_SCAN_STREAMBUFFER) returned failure, file unreadable?");
-            return 1;
+            return -2;
         }
 
         fclose(ScanDescriptor.UserPtr);
       
-    	call_rsignal(*argv, &ScanDescriptor, &ScanParams, &KernelHandle);
-    }
+    	//call_rsignal(*argv/*, &ScanDescriptor, &ScanParams, &KernelHandle*/);
+    //}
+	for(;;){
+	size_t len;
+	uint8_t *buf;
+	if (false){
 
+		ScanDescriptor.UserPtr = fopen(argv[1],"r");
+		 if (ScanDescriptor.UserPtr == NULL) {
+	            LogMessage("failed to open file %s", argv[1]);
+            	    return -10;
+                 }
+
+
+	}else{
+		ScanDescriptor.UserPtr = fopen("/tmp/test", "w");
+		 if (ScanDescriptor.UserPtr == NULL) {
+	            LogMessage("failed to open file %s", "/tmp/test");
+            	    return -10;
+                 }
+
+       		LogMessage("Writing...");
+		HF_ITER(&buf,&len);
+		
+        	fwrite(buf,1,len,ScanDescriptor.UserPtr);
+		//fwrite("X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*",1,69,ScanDescriptor.UserPtr);
+	        fflush(ScanDescriptor.UserPtr);	
+		fclose(ScanDescriptor.UserPtr);
+		ScanDescriptor.UserPtr = fopen("/tmp/test", "r");
+		//exit(13);
+	}
+        LogMessage("Scanning %s...", "/tmp/test");
+
+        if (__rsignal(&KernelHandle, RSIG_SCAN_STREAMBUFFER, &ScanParams, sizeof(SCANSTREAM_PARAMS)) != 0) {
+            LogMessage("__rsignal(RSIG_SCAN_STREAMBUFFER) returned failure, file unreadable?");
+        }
+
+        fclose(ScanDescriptor.UserPtr);
+	//return 0;
+	}
     return 0;
 }
