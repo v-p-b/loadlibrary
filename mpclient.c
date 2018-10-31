@@ -56,7 +56,7 @@
 extern HF_ITER(uint8_t** buf, size_t* len);
 
 size_t hf_len;
-uint8_t hf_buf;
+uint8_t *hf_buf;
 
 // Any usage limits to prevent bugs disrupting system.
 const struct rlimit kUsageLimits[] = {
@@ -110,7 +110,8 @@ static DWORD ReadStream(PVOID this, ULONGLONG Offset, PVOID Buffer, DWORD Size, 
 
 static DWORD GetStreamSize(PVOID this, PULONGLONG FileSize)
 {
-    return hf_len;
+    *FileSize=hf_len;
+    return TRUE;
     /*fseek(this, 0, SEEK_END);
     *FileSize = ftell(this);
     return TRUE;*/
