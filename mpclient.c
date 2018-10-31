@@ -252,22 +252,22 @@ int main(int argc, char **argv, char **envp)
     fclose(ScanDescriptor.UserPtr);
       
     
-	for(;;){
-		size_t len;
-		uint8_t *buf;
-		ScanDescriptor.UserPtr = fopen("/tmp/test", "w+");
-		if (ScanDescriptor.UserPtr == NULL) {
-	        LogMessage("failed to open file /tmp/test");
+    for(;;){
+        size_t len;
+        uint8_t *buf;
+        ScanDescriptor.UserPtr = fopen("/tmp/test", "w+");
+        if (ScanDescriptor.UserPtr == NULL) {
+            LogMessage("failed to open file /tmp/test");
             return -10;
         }
 
-       	LogMessage("Writing...");
+        LogMessage("Writing...");
 
-		HF_ITER(&buf,&len);
+        HF_ITER(&buf,&len);
         fwrite(buf,1,len,ScanDescriptor.UserPtr);
-		
+        
         rewind(ScanDescriptor.UserPtr);
-	
+    
         LogMessage("Scanning %s...", "/tmp/test");
 
         if (__rsignal(&KernelHandle, RSIG_SCAN_STREAMBUFFER, &ScanParams, sizeof(SCANSTREAM_PARAMS)) != 0) {
@@ -275,6 +275,6 @@ int main(int argc, char **argv, char **envp)
         }
 
         fclose(ScanDescriptor.UserPtr);
-	}
+    }
     return 0;
 }
