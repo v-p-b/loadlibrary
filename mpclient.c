@@ -55,6 +55,9 @@
 
 extern HF_ITER(uint8_t** buf, size_t* len);
 
+size_t hf_len;
+uint8_t hf_buf;
+
 // Any usage limits to prevent bugs disrupting system.
 const struct rlimit kUsageLimits[] = {
     [RLIMIT_FSIZE]  = { .rlim_cur = 0x20000000, .rlim_max = 0x20000000 },
@@ -98,16 +101,19 @@ static DWORD EngineScanCallback(PSCANSTRUCT Scan)
 
 static DWORD ReadStream(PVOID this, ULONGLONG Offset, PVOID Buffer, DWORD Size, PDWORD SizeRead)
 {
-    fseek(this, Offset, SEEK_SET);
-    *SizeRead = fread(Buffer, 1, Size, this);
+    Buffer=hf_buf;
     return TRUE;
+    /*fseek(this, Offset, SEEK_SET);
+    *SizeRead = fread(Buffer, 1, Size, this);
+    return TRUE;*/
 }
 
 static DWORD GetStreamSize(PVOID this, PULONGLONG FileSize)
 {
-    fseek(this, 0, SEEK_END);
+    return hf_len;
+    /*fseek(this, 0, SEEK_END);
     *FileSize = ftell(this);
-    return TRUE;
+    return TRUE;*/
 }
 
 static PWCHAR GetStreamName(PVOID this)
@@ -251,30 +257,17 @@ int main(int argc, char **argv, char **envp)
 
     fclose(ScanDescriptor.UserPtr);
       
-    
     for(;;){
-        size_t len;
-        uint8_t *buf;
-        ScanDescriptor.UserPtr = fopen("/tmp/test", "w+");
-        if (ScanDescriptor.UserPtr == NULL) {
-            LogMessage("failed to open file /tmp/test");
-            return -10;
-        }
+        ScanDescriptor.UserPtr = NULL;
 
-        LogMessage("Writing...");
-
-        HF_ITER(&buf,&len);
-        fwrite(buf,1,len,ScanDescriptor.UserPtr);
-        
-        rewind(ScanDescriptor.UserPtr);
+        HF_ITER(&hf_buf,&hf_len);
     
-        LogMessage("Scanning %s...", "/tmp/test");
+        LogMessage("Scanning hf_buf...");
 
         if (__rsignal(&KernelHandle, RSIG_SCAN_STREAMBUFFER, &ScanParams, sizeof(SCANSTREAM_PARAMS)) != 0) {
             LogMessage("__rsignal(RSIG_SCAN_STREAMBUFFER) returned failure, file unreadable?");
         }
 
-        fclose(ScanDescriptor.UserPtr);
     }
     return 0;
 }
