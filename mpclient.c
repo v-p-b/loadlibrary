@@ -101,9 +101,12 @@ static DWORD EngineScanCallback(PSCANSTRUCT Scan)
 
 static DWORD ReadStream(PVOID this, ULONGLONG Offset, PVOID Buffer, DWORD Size, PDWORD SizeRead)
 {
+    //LogMessage("(0) hf_len: %x, Size: %x, *SizeRead: %x, Offset: %llx",hf_len, Size, *SizeRead, Offset);
     if(Offset>hf_len) Offset=hf_len;
-    memcpy(Buffer,hf_buf+Offset,hf_len-Offset);
-    *SizeRead=hf_len-Offset;
+    *SizeRead=MIN(hf_len-Offset,Size);
+    //LogMessage("(1) hf_len: %x, Size: %x, *SizeRead: %x, Offset: %llx",hf_len, Size, *SizeRead, Offset);
+    memcpy(Buffer,this+Offset,*SizeRead);
+
     return TRUE;
 }
 
@@ -255,22 +258,22 @@ int main(int argc, char **argv, char **envp)
     fclose(ScanDescriptor.UserPtr);
       
     for(;;){
-		size_t len;
-		uint8_t *buf;
-	    ScanDescriptor.UserPtr = NULL;//fopen("/tmp/input/eicar.com","r");
+        size_t len;
+        uint8_t *buf;
+        ScanDescriptor.UserPtr = NULL;//fopen("/tmp/input/eicar.com","r");
 
-	    HF_ITER(&hf_buf,&hf_len);
-		/*hf_buf=malloc(69);
-		memcpy(hf_buf,"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*",69);
-		hf_len=69;*/
-	    
-	        //LogMessage("Scanning hf_buf...");
+        HF_ITER(&ScanDescriptor.UserPtr,&hf_len);
+        /*hf_buf=malloc(69);
+        memcpy(hf_buf,"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*",69);
+        hf_len=69;*/
+    
+        //LogMessage("Scanning hf_buf...");
 
-	    if (__rsignal(&KernelHandle, RSIG_SCAN_STREAMBUFFER, &ScanParams, sizeof(SCANSTREAM_PARAMS)) != 0) {
-	        //LogMessage("__rsignal(RSIG_SCAN_STREAMBUFFER) returned failure, file unreadable?");
-	    }
-	    //free(hf_buf);
-		//fclose(ScanDescriptor.UserPtr);
+        if (__rsignal(&KernelHandle, RSIG_SCAN_STREAMBUFFER, &ScanParams, sizeof(SCANSTREAM_PARAMS)) != 0) {
+            //LogMessage("__rsignal(RSIG_SCAN_STREAMBUFFER) returned failure, file unreadable?");
+        }
+        //free(hf_buf);
+        //fclose(ScanDescriptor.UserPtr);
 
     }
     return 0;
