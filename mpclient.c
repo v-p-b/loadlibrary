@@ -75,7 +75,7 @@ static DWORD EngineScanCallback(PSCANSTRUCT Scan)
         LogMessage("Scanning archive member %s", Scan->VirusName);
     }
     if (Scan->Flags & SCAN_FILENAME) {
-        LogMessage("Scanning %s", Scan->FileName);
+        //LogMessage("Scanning %s", Scan->FileName);
     }
     if (Scan->Flags & SCAN_PACKERSTART) {
         LogMessage("Packer %s identified.", Scan->VirusName);
@@ -101,20 +101,16 @@ static DWORD EngineScanCallback(PSCANSTRUCT Scan)
 
 static DWORD ReadStream(PVOID this, ULONGLONG Offset, PVOID Buffer, DWORD Size, PDWORD SizeRead)
 {
-    Buffer=hf_buf;
+    if(Offset>hf_len) Offset=hf_len;
+    memcpy(Buffer,hf_buf+Offset,hf_len-Offset);
+    *SizeRead=hf_len-Offset;
     return TRUE;
-    /*fseek(this, Offset, SEEK_SET);
-    *SizeRead = fread(Buffer, 1, Size, this);
-    return TRUE;*/
 }
 
 static DWORD GetStreamSize(PVOID this, PULONGLONG FileSize)
 {
     *FileSize=hf_len;
     return TRUE;
-    /*fseek(this, 0, SEEK_END);
-    *FileSize = ftell(this);
-    return TRUE;*/
 }
 
 static PWCHAR GetStreamName(PVOID this)
@@ -259,15 +255,22 @@ int main(int argc, char **argv, char **envp)
     fclose(ScanDescriptor.UserPtr);
       
     for(;;){
-        ScanDescriptor.UserPtr = NULL;
+		size_t len;
+		uint8_t *buf;
+	    ScanDescriptor.UserPtr = NULL;//fopen("/tmp/input/eicar.com","r");
 
-        HF_ITER(&hf_buf,&hf_len);
-    
-        LogMessage("Scanning hf_buf...");
+	    HF_ITER(&hf_buf,&hf_len);
+		/*hf_buf=malloc(69);
+		memcpy(hf_buf,"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*",69);
+		hf_len=69;*/
+	    
+	        //LogMessage("Scanning hf_buf...");
 
-        if (__rsignal(&KernelHandle, RSIG_SCAN_STREAMBUFFER, &ScanParams, sizeof(SCANSTREAM_PARAMS)) != 0) {
-            LogMessage("__rsignal(RSIG_SCAN_STREAMBUFFER) returned failure, file unreadable?");
-        }
+	    if (__rsignal(&KernelHandle, RSIG_SCAN_STREAMBUFFER, &ScanParams, sizeof(SCANSTREAM_PARAMS)) != 0) {
+	        //LogMessage("__rsignal(RSIG_SCAN_STREAMBUFFER) returned failure, file unreadable?");
+	    }
+	    //free(hf_buf);
+		//fclose(ScanDescriptor.UserPtr);
 
     }
     return 0;
