@@ -25,11 +25,24 @@ call.o: call.asm
 ODSHook.o: ODSHook.c ODSHook.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
+script.h: javascript.txt
+	hexdump -v -e '8/1 "%#02x," "\n"' < $^ > $@
+
+mpscript.o: script.h
+
 mpclient: mpclient.o intercept/hook.o ODSHook.o call.o | peloader
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS) $(LDFLAGS)
 
+script.h: javascript.txt
+       hexdump -v -e '8/1 "%#02x," "\n"' < $^ > $@
+
+mpscript.o: script.h
+
+mpscript: mpscript.o intercept/hook.o | peloader
+       $(CC) $(CFLAGS) $^ -o $@ $(LDLIBS) $(LDFLAGS) -lreadline
+
 clean:
-	rm -f a.out core *.o core.* vgcore.* gmon.out mpclient
+	rm -f a.out core *.o core.* vgcore.* gmon.out mpclient mpscript script.h mpscript.o
 	make -C intercept clean
 	make -C peloader clean
 	rm -rf faketemp
