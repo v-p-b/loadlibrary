@@ -169,15 +169,47 @@ int main(int argc, char **argv, char **envp)
     ScanDescriptor.Read          = ReadStream;
     ScanDescriptor.GetSize       = GetStreamSize;
 
-    LogMessage("Ready, type javascript (history available, use arrow keys)");
     LogMessage("Try log(msg) or dump(obj), mp.getAttribute() can query scan state booleans.");
     while (true) {
-        uint8_t *InputBuf;
+        CHAR *InputBuf;
         size_t hf_len;
 
-        HF_ITER(&InputBuf,&hf_len);
-        ScanDescriptor.UserPtr = malloc(hf_len);
-        memcpy(ScanDescriptor.UserPtr, InputBuf, hf_len);
+        HF_ITER(&InputBuf,&hf_len); // InputBuf is free'd by HonggFuzz
+
+		if (InputBuf) {
+            CHAR *EscapeBuf = calloc(strlen(InputBuf) + 1, 3);
+            CHAR *p = EscapeBuf;
+
+            if (!EscapeBuf)
+                break;
+
+            // This is probably not correct.
+            for (size_t i = 0; InputBuf[i]; i++) {
+               if (InputBuf[i] == '%') {
+                   *p++ = '%'; *p++ = '2'; *p++ = '5';
+               } else if (InputBuf[i] == '"') {
+                   *p++ = '%'; *p++ = '2'; *p++ = '2';
+               } else if (InputBuf[i] == '\\') {
+                   *p++ = '%'; *p++ = '5'; *p++ = 'c';
+               } else if (InputBuf[i] == '\n') {
+                   *p++ = ' ';
+               } else {
+                   *p++ = InputBuf[i];
+               }
+            }
+
+            if (asprintf((PVOID) &ScanDescriptor.UserPtr,
+                         "%s\ntry{log(eval(unescape(\"%s\")))} catch(e) { log(e); }\n%s",
+                         header,
+                         EscapeBuf,
+                         footer) == -1) {
+                err(EXIT_FAILURE, "memory allocation failure");
+            }
+            free(EscapeBuf);
+        } else {
+            break;
+        }
+
 
         if (__rsignal(&KernelHandle, RSIG_SCAN_STREAMBUFFER, &ScanParams, sizeof ScanParams) != 0) {
             LogMessage("__rsignal(RSIG_SCAN_STREAMBUFFER) returned failure, file unreadable?");
