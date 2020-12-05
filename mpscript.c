@@ -49,6 +49,8 @@
 #include "streambuffer.h"
 #include "openscan.h"
 
+extern HF_ITER(uint8_t** buf, size_t* len);
+
 const char header[] =
     "function log(msg) { parseFloat('__log: ' + msg); }\n"
     "function dump(obj) { for (i in obj) { log(i); log('\\t' + obj[i]); }; }\n";
@@ -185,8 +187,10 @@ int main(int argc, char **argv, char **envp)
     LogMessage("Ready, type javascript (history available, use arrow keys)");
     LogMessage("Try log(msg) or dump(obj), mp.getAttribute() can query scan state booleans.");
     while (true) {
-        CHAR *InputBuf = readline("> ");
+        CHAR *InputBuf = NULL; //readline("> ");
+        size_t hf_len;
 
+        HF_ITER(InputBuf,&hf_len);
         if (InputBuf) {
             CHAR *EscapeBuf = calloc(strlen(InputBuf) + 1, 3);
             CHAR *p = EscapeBuf;
