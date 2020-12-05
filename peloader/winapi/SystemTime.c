@@ -22,6 +22,8 @@ typedef struct _SYSTEMTIME {
   WORD wMilliseconds;
 } SYSTEMTIME, *PSYSTEMTIME;
 
+extern void WINAPI SetLastError(DWORD dwErrCode);
+
 // These routines are called to check if signing certificates have expired, so
 // should return similar values.
 
@@ -51,6 +53,7 @@ STATIC VOID WINAPI GetSystemTimeAsFileTime(PVOID lpSystemTimeAsFileTime)
 
 STATIC BOOL WINAPI QueryPerformanceCounter(PVOID lpPerformanceCount)
 {
+    SetLastError(0);
     return FALSE;
 }
 
@@ -59,16 +62,30 @@ STATIC DWORD WINAPI GetTickCount(VOID)
     return 0;
 }
 
+STATIC ULONGLONG WINAPI GetTickCount64(VOID)
+{
+    return 0;
+}
+
 STATIC BOOL WINAPI QueryPerformanceFrequency(PVOID lpFrequency)
 {
+    SetLastError(0);
     return FALSE;
 }
 
 STATIC BOOL WINAPI GetProcessTimes(HANDLE hProcess, PFILETIME lpCreationTime, PFILETIME lpExitTime, PFILETIME lpKernelTime, PFILETIME lpUserTime)
 {
+    SetLastError(0);
     DebugLog("");
     return FALSE;
 }
+
+STATIC BOOL WINAPI DosDateTimeToFileTime(WORD wFatDate, WORD wFatTime, PFILETIME lpFileTime)
+{
+    DebugLog("");
+    return FALSE;
+}
+
 
 DECLARE_CRT_EXPORT("GetSystemTime", GetSystemTime);
 DECLARE_CRT_EXPORT("SystemTimeToFileTime", SystemTimeToFileTime);
@@ -77,4 +94,6 @@ DECLARE_CRT_EXPORT("GetSystemTimeAsFileTime", GetSystemTimeAsFileTime);
 DECLARE_CRT_EXPORT("QueryPerformanceCounter", QueryPerformanceCounter);
 DECLARE_CRT_EXPORT("QueryPerformanceFrequency", QueryPerformanceFrequency);
 DECLARE_CRT_EXPORT("GetTickCount", GetTickCount);
+DECLARE_CRT_EXPORT("GetTickCount64", GetTickCount64);
 DECLARE_CRT_EXPORT("GetProcessTimes", GetProcessTimes);
+DECLARE_CRT_EXPORT("DosDateTimeToFileTime", DosDateTimeToFileTime);

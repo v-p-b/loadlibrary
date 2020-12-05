@@ -27,15 +27,17 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <limits.h>
 #include <errno.h>
 #include <string.h>
 #include <search.h>
+#include <stdlib.h>
+#include <assert.h>
 #include <err.h>
 
 #include "winnt_types.h"
 #include "pe_linker.h"
 #include "ntoskernel.h"
-#include "codealloc.h"
 #include "util.h"
 #include "log.h"
 
@@ -47,6 +49,7 @@ struct pe_exports {
 
 static struct pe_exports *pe_exports;
 static int num_pe_exports;
+PKUSER_SHARED_DATA SharedUserData;
 
 #define DRIVER_NAME "pelinker"
 #define RVA2VA(image, rva, type) (type)(ULONG_PTR)((void *)image + rva)
@@ -87,6 +90,15 @@ static const char *image_directory_name[] = {
 };
 
 extern struct wrap_export crt_exports[];
+
+uintptr_t LocalStorage[1024] = {0};
+PFLS_CALLBACK_FUNCTION FlsCallbacks[1024] = {0};
+
+static ULONG TlsBitmapData[32];
+static RTL_BITMAP TlsBitmap = {
+    .SizeOfBitMap = sizeof(TlsBitmapData) * CHAR_BIT,
+    .Buffer = (PVOID) &TlsBitmapData[0],
+};
 
 struct hsearch_data extraexports;
 struct hsearch_data crtexports;
@@ -285,9 +297,9 @@ static int import(void *image, IMAGE_IMPORT_DESCRIPTOR *dirent, char *dll)
 static int read_exports(struct pe_image *pe)
 {
         IMAGE_EXPORT_DIRECTORY *export_dir_table;
-        uint32_t *export_addr_table;
         int i;
         uint32_t *name_table;
+        uint16_t *ordinal_table;
         PIMAGE_OPTIONAL_HEADER opt_hdr;
         IMAGE_DATA_DIRECTORY *export_data_dir;
 
@@ -306,31 +318,31 @@ static int read_exports(struct pe_image *pe)
 
         name_table = (unsigned int *)(pe->image +
                                       export_dir_table->AddressOfNames);
-        export_addr_table = (uint32_t *)
-                (pe->image + export_dir_table->AddressOfFunctions);
+        ordinal_table = (uint16_t *)(pe->image +
+                                      export_dir_table->AddressOfNameOrdinals);
 
         pe_exports = calloc(export_dir_table->NumberOfNames, sizeof(struct pe_exports));
 
         for (i = 0; i < export_dir_table->NumberOfNames; i++) {
+                uint32_t address = ((uint32_t *) (pe->image + export_dir_table->AddressOfFunctions))[*ordinal_table];
 
-                if (export_data_dir->VirtualAddress <= *export_addr_table ||
-                    *export_addr_table >= (export_data_dir->VirtualAddress +
+                if (export_data_dir->VirtualAddress <= address ||
+                    address >= (export_data_dir->VirtualAddress +
                                            export_data_dir->Size)) {
                         //DBGLINKER("forwarder rva");
                 }
 
                 //DBGLINKER("export symbol: %s, at %p",
                 //          (char *)(pe->image + *name_table),
-                //          pe->image + *export_addr_table);
+                //          pe->image + address);
 
                 pe_exports[num_pe_exports].dll = pe->name;
                 pe_exports[num_pe_exports].name = pe->image + *name_table;
-                pe_exports[num_pe_exports].addr =
-                        pe->image + *export_addr_table;
+                pe_exports[num_pe_exports].addr = pe->image + address;
 
                 num_pe_exports++;
                 name_table++;
-                export_addr_table++;
+                ordinal_table++;
         }
         return 0;
 }
@@ -452,15 +464,21 @@ static int fix_pe_image(struct pe_image *pe)
         }
 
         image_size = pe->opt_hdr->SizeOfImage;
-        image      = code_malloc(image_size + getpagesize());
 
-        // Round to page size?
-        //image      = (PVOID)(ROUND_UP((ULONG)(image), getpagesize()));
+        // TODO: If image does not have DYNAMIC_BASE, add MAP_FIXED.
 
-        if (image == NULL) {
-                ERROR("failed to allocate enough space for new image: %d bytes, %m", image_size);
+        image      = mmap((PVOID)(pe->opt_hdr->ImageBase),
+                          image_size + getpagesize(),
+                          PROT_READ | PROT_WRITE | PROT_EXEC,
+                          MAP_ANONYMOUS | MAP_PRIVATE,
+                          -1,
+                          0);
+
+        if (image == MAP_FAILED) {
+                ERROR("failed to mmap desired space for image: %d bytes, image base %p, %m", image_size, pe->opt_hdr->ImageBase);
                 return -ENOMEM;
         }
+
         memset(image, 0, image_size);
 
         /* Copy all the headers, ie everything before the first section. */
@@ -480,7 +498,7 @@ static int fix_pe_image(struct pe_image *pe)
                 if (sect_hdr->VirtualAddress+sect_hdr->SizeOfRawData >
                     image_size) {
                         ERROR("Invalid section %s in driver", sect_hdr->Name);
-                        code_free(image);
+                        munmap(image, image_size + getpagesize());
                         return -EINVAL;
                 }
 
@@ -559,6 +577,26 @@ int link_pe_images(struct pe_image *pe_image, unsigned short n)
                                pe->opt_hdr->AddressOfEntryPoint, void *);
                 //TRACE1("entry is at %p, rva at %08X", pe->entry,
                 //       pe->opt_hdr->AddressOfEntryPoint);
+
+                // Check if there were enough data directories for a TLS section.
+                if (pe->opt_hdr->NumberOfRvaAndSizes >= IMAGE_DIRECTORY_ENTRY_TLS) {
+                    // Normally, we would be expected to allocate a TLS slot,
+                    // place the number into *TlsData->AddressOfIndex, and make
+                    // it a pointer to RawData, and then process the callbacks.
+                    //
+                    // We don't support threads, so it seems safe to just
+                    // pre-allocate a slot and point it straight to the
+                    // template data.
+                    //
+                    // FIXME: Verify callbacks list is empty and SizeOfZeroFill is zero.
+                    //
+                    PIMAGE_TLS_DIRECTORY TlsData = RVA2VA(pe->image,
+                                                          pe->opt_hdr->DataDirectory[IMAGE_DIRECTORY_ENTRY_TLS].VirtualAddress,
+                                                          IMAGE_TLS_DIRECTORY *);
+
+                    // This means that slot 0 is reserved.
+                    LocalStorage[0] = (uintptr_t) TlsData->RawDataStart;
+                }
         }
 
         return 0;
@@ -610,6 +648,9 @@ bool pe_load_library(const char *filename, void **image, size_t *size)
     // code that uses SEH as it accesses it via fs selector.
     setup_nt_threadinfo(NULL);
 
+    // Install a minimal KUSER_SHARED_DATA structure.
+    setup_kuser_shared_data();
+
     return true;
 
 error:
@@ -625,13 +666,18 @@ error:
 bool setup_nt_threadinfo(PEXCEPTION_HANDLER ExceptionHandler)
 {
     static EXCEPTION_FRAME ExceptionFrame;
-    static NT_TIB ThreadInfo = {
-        .Self = &ThreadInfo,
+    static PEB ProcessEnvironmentBlock = {
+        .TlsBitmap          = &TlsBitmap,
+    };
+    static TEB ThreadEnvironment = {
+        .Tib.Self                   = &ThreadEnvironment.Tib,
+        .ThreadLocalStoragePointer  = LocalStorage, // https://github.com/taviso/loadlibrary/issues/65
+        .ProcessEnvironmentBlock    = &ProcessEnvironmentBlock,
     };
     struct user_desc pebdescriptor = {
         .entry_number       = -1,
-        .base_addr          = (uintptr_t) &ThreadInfo,
-        .limit              = sizeof ThreadInfo,
+        .base_addr          = (uintptr_t) &ThreadEnvironment,
+        .limit              = sizeof ThreadEnvironment,
         .seg_32bit          = 1,
         .contents           = 0,
         .read_exec_only     = 0,
@@ -641,12 +687,12 @@ bool setup_nt_threadinfo(PEXCEPTION_HANDLER ExceptionHandler)
     };
 
     if (ExceptionHandler) {
-        if (ThreadInfo.ExceptionList) {
+        if (ThreadEnvironment.Tib.ExceptionList) {
             DebugLog("Resetting ThreadInfo.ExceptionList");
         }
-        ExceptionFrame.handler      = ExceptionHandler;
-        ExceptionFrame.prev         = NULL;
-        ThreadInfo.ExceptionList    = &ExceptionFrame;
+        ExceptionFrame.handler              = ExceptionHandler;
+        ExceptionFrame.prev                 = NULL;
+        ThreadEnvironment.Tib.ExceptionList = &ExceptionFrame;
     }
 
     if (syscall(__NR_set_thread_area, &pebdescriptor) != 0) {
@@ -655,6 +701,24 @@ bool setup_nt_threadinfo(PEXCEPTION_HANDLER ExceptionHandler)
 
     // Install descriptor
     asm("mov %[segment], %%fs" :: [segment] "r"(pebdescriptor.entry_number*8+3));
+
+    return true;
+}
+
+// Minimal KUSER_SHARED_DATA structure, for those applications that require it.
+bool setup_kuser_shared_data(void)
+{
+    SharedUserData = mmap((PVOID)(MM_SHARED_USER_DATA_VA),
+                          sizeof(KUSER_SHARED_DATA),
+                          PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+                          -1,
+                          0);
+
+    if (SharedUserData == MAP_FAILED) {
+        DebugLog("failed to map KUSER_SHARED_DATA, %m");
+        return false;
+    }
 
     return true;
 }

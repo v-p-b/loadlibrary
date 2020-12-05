@@ -6,7 +6,7 @@ LDLIBS  = intercept/libdisasm.a -Wl,--whole-archive,peloader/libpeloader.a,--no-
 
 .PHONY: clean peloader intercept
 
-TARGETS=mpclient
+TARGETS=mpclient | peloader
 
 all: $(TARGETS)
 	-mkdir -p faketemp
@@ -16,11 +16,6 @@ intercept:
 
 peloader:
 	make -C peloader all
-
-script.h: javascript.txt
-	hexdump -v -e '8/1 "%#02x," "\n"' < $^ > $@
-
-mpscript.o: script.h
 
 intercept/hook.o: intercept
 
@@ -33,12 +28,8 @@ ODSHook.o: ODSHook.c ODSHook.h
 mpclient: mpclient.o intercept/hook.o ODSHook.o call.o | peloader
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS) $(LDFLAGS)
 
-# mpscript requires libreadline-dev:i386
-mpscript: mpscript.o intercept/hook.o | peloader
-	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS) $(LDFLAGS) -lreadline
-
 clean:
-	rm -f a.out core *.o core.* vgcore.* gmon.out script.h mpclient mpscript
+	rm -f a.out core *.o core.* vgcore.* gmon.out mpclient
 	make -C intercept clean
 	make -C peloader clean
 	rm -rf faketemp

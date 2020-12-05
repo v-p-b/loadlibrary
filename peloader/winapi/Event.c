@@ -15,6 +15,8 @@
 #include "util.h"
 #include "winstrings.h"
 
+extern void WINAPI SetLastError(DWORD dwErrCode);
+
 static HANDLE WINAPI CreateEventW(PVOID lpEventAttributes, BOOL bManualReset, BOOL bInitialState, PWCHAR lpName)
 {
     char *AnsiName;
@@ -27,6 +29,8 @@ static HANDLE WINAPI CreateEventW(PVOID lpEventAttributes, BOOL bManualReset, BO
     DebugLog("%p, %u, %u, %p [%s]", lpEventAttributes, bManualReset, bInitialState, lpName, AnsiName);
 
     free(AnsiName);
+
+    SetLastError(0);
 
     return (HANDLE) 'EVNT';
 }
