@@ -113,7 +113,7 @@ static DWORD WINAPI GetStreamSize(PVOID this, PULONGLONG FileSize)
 
 static PWCHAR WINAPI GetStreamName(PVOID this)
 {
-    return L"input";
+    return L"C:\\mpclient.input";
 }
 
 // These are available for pintool.
