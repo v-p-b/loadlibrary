@@ -130,11 +130,13 @@ CreateFileW(PWCHAR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, PVOID l
     for (char *t = filename; *t; t++)
         *t = tolower(*t);
 
-    //LogMessage("%u %s", dwCreationDisposition, filename);
-
     switch (dwCreationDisposition) {
         case OPEN_EXISTING:
-            FileHandle = fopen(filename, "r");
+	    if (strstr(filename, "mpcache-")) {
+                FileHandle = NULL; // fopen(mpcache_path, "r");
+            }else{
+                FileHandle = fopen(filename, "r");
+	    }
             break;
         case CREATE_ALWAYS:
             FileHandle = fopen("/dev/null", "w");
@@ -145,10 +147,9 @@ CreateFileW(PWCHAR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, PVOID l
                 FileHandle = fopen(filename, "w");
                 // Unlink it immediately so it's cleaned up on exit.
                 unlink(filename);
-                /*
             } else if (strstr(filename, "mpcache-")) {
-                FileHandle = fopen(filename, "w");
-                 */
+                FileHandle = NULL; // fopen(filename, "w");
+		DebugLog("NOT creating mpcache");
             } else {
                 FileHandle = fopen("/dev/null", "w");
             }
@@ -217,6 +218,7 @@ static BOOL WINAPI CloseHandle(HANDLE hObject) {
 static BOOL WINAPI
 ReadFile(HANDLE hFile, PVOID lpBuffer, DWORD nNumberOfBytesToRead, PDWORD lpNumberOfBytesRead, PVOID lpOverlapped) {
     *lpNumberOfBytesRead = fread(lpBuffer, 1, nNumberOfBytesToRead, hFile);
+    DebugLog("%p %d", hFile, nNumberOfBytesToRead);
     return TRUE;
 }
 
@@ -251,6 +253,7 @@ static BOOL WINAPI GetFileSizeEx(HANDLE hFile, uint64_t *lpFileSize) {
 }
 
 static HANDLE WINAPI FindFirstFileW(PWCHAR lpFileName, PVOID lpFindFileData) {
+    DebugLog("%p  %p", lpFileName,lpFindFileData);
     char *name = CreateAnsiFromWide(lpFileName);
 
     DebugLog("%p [%s], %p", lpFileName, name, lpFindFileData);
@@ -260,6 +263,17 @@ static HANDLE WINAPI FindFirstFileW(PWCHAR lpFileName, PVOID lpFindFileData) {
     SetLastError(ERROR_FILE_NOT_FOUND);
 
     return INVALID_HANDLE_VALUE;
+}
+
+static HANDLE WINAPI FindFirstFileExW(
+  LPCWSTR            lpFileName,
+  int fInfoLevelId,
+  LPVOID             lpFindFileData,
+  int  fSearchOp,
+  LPVOID             lpSearchFilter,
+  DWORD              dwAdditionalFlags
+){
+	return FindFirstFileW(lpFileName, lpFindFileData);
 }
 
 static DWORD WINAPI GetCurrentDirectoryW(DWORD BufferLength, LPWSTR Buffer) 
@@ -415,6 +429,8 @@ DECLARE_CRT_EXPORT("DeleteFileW", DeleteFileW);
 DECLARE_CRT_EXPORT("GetFileSizeEx", GetFileSizeEx);
 
 DECLARE_CRT_EXPORT("FindFirstFileW", FindFirstFileW);
+
+DECLARE_CRT_EXPORT("FindFirstFileExW", FindFirstFileExW);
 
 DECLARE_CRT_EXPORT("GetCurrentDirectoryW", GetCurrentDirectoryW);
 
