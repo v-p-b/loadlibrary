@@ -184,12 +184,18 @@ static PVOID WINAPI CertFindCertificateInStore(HANDLE hCertStore,
     DebugLog("FakeCert: %p", &FakeCert);
 
     FakeCert.dwCertEncodingType = 1;
-    if(!memcmp(((PCERT_NAME_BLOB) pvFindPara)->pbData, SigningCertificate+211, ((PCERT_NAME_BLOB) pvFindPara)->cbData))
+    if(!memcmp(((PCERT_NAME_BLOB) pvFindPara)->pbData, SigningCertificate2010+211, ((PCERT_NAME_BLOB) pvFindPara)->cbData))
     {
-        FakeCert.pbCertEncoded = SigningCertificate;
-        FakeCert.cbCertEncoded = sizeof(SigningCertificate);
+        FakeCert.pbCertEncoded = SigningCertificate2010;
+        FakeCert.cbCertEncoded = sizeof(SigningCertificate2010);
         DebugLog("Microsoft Code Signing PCA 2010");
+    }else if(!memcmp(((PCERT_NAME_BLOB) pvFindPara)->pbData, SigningCertificate2024+220, ((PCERT_NAME_BLOB) pvFindPara)->cbData))
+    {
+        FakeCert.pbCertEncoded = SigningCertificate2024;
+        FakeCert.cbCertEncoded = sizeof(SigningCertificate2024);
+        DebugLog("Microsoft Code Signing PCA 2024");
     }
+
     else
     {
         FakeCert.pbCertEncoded = RootCertificate;
